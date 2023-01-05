@@ -1,0 +1,55 @@
+# This module imports SQL dumps
+#
+# Import specific configurations depends on D_ENV variable
+#
+
+- name: "Set default value for DB_IMPORT:  {{ DB_IMPORT | default('yes') }}"
+  tags: always
+  set_fact:
+    DB_IMPORT: "{{ DB_IMPORT | default('yes') }}"
+
+- debug:
+    msg: "Execute module: build-mysql-gz"
+
+- name: Wait before MySQL instance run
+  pause:
+    seconds: "{{ DB_WAITTIME | default(20) | int }}"
+
+- name: "Drop DB [ site: {{ site_name }}, db: {{ DB_NAME }} ]"
+  mysql_db:
+    state:          "absent"
+    name:           "{{ DB_NAME }}"
+    login_host:     "{{ DB_HOST }}"
+    login_user:     "root"
+    login_password: "{{ DB_PASS }}"
+
+- name: "Create DB [ site: {{ site_name }}, db: {{ DB_NAME }} ]"
+  mysql_db:
+    state:          "present"
+    name:           "{{ DB_NAME }}"
+    login_host:     "{{ DB_HOST }}"
+    login_user:     "root"
+    login_password: "{{ DB_PASS }}"
+
+- name: "Grant permittions for {{ DB_USER }} to DB: {{ DB_NAME }}"
+  mysql_user:
+    state:          "present"
+    name:           "{{ DB_USER }}"
+    password:       "{{ DB_PASS }}"
+    append_privs:   "true"
+    priv:           "*.*:ALL,GRANT"
+    host_all:       "yes"
+    login_host:     "{{ DB_HOST }}"
+    login_user:     "root"
+    login_password: "{{ DB_PASS }}"
+
+# Load found SQL files (it can be more than one dump)
+- name: "Restore DB [ site: {{ site_name }}, db: {{ DB_NAME }} ]"
+  when: DB_IMPORT != "no"
+  mysql_db:
+    state: import
+    name:           "{{ DB_NAME }}"
+    login_host:     "{{ DB_HOST }}"
+    login_user:     "root"
+    login_password: "{{ DB_PASS }}"
+    target:         "{{ ansible_path | default('/app/build') }}/{{ DB_PATH | default('files/sites/default/database.sql.gz') }}"

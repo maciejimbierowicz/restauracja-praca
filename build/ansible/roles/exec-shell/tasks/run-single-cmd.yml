@@ -1,0 +1,6 @@
+---
+
+- name: "{{ cmd }}"
+  command: "{{ cmd }}"
+  args:
+    chdir: "{{ app_path }}/{{ DIR }}"

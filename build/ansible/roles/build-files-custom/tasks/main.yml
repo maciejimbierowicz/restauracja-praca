@@ -1,0 +1,4 @@
+---
+#custom files to custom directory
+- include_tasks: common.yml
+- include_tasks: permissions.yml

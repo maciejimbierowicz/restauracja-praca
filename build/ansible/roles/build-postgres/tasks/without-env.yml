@@ -1,0 +1,98 @@
+---
+
+# It's needed to convert site name while MySQL doesn't allow
+# all special characters in DB names
+# - name: "Convert site name to DB name"
+#   set_fact:
+#     POSTGRES_DB_NAME_TMP: "{{ site_name | lower | regex_replace('\\.') | truncate(18, True, '') }}"
+
+# - debug:
+#     var: POSTGRES_DB_NAME_TMP
+
+- name: "Drop connections to DB {{ cmd }}"
+  postgresql_query:
+    #db:             "{{ cmd }}"
+    login_host:     "{{ POSTGRES_HOST }}"
+    login_user:     "{{ POSTGRES_USER }}"
+    login_password: "{{ POSTGRES_PASSWORD }}"
+    query:          "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = '{{ cmd }}'"
+  when: 'POSTGRES_IMPORT_REMOVE_OLD == "1"'
+
+- name: "Drop DB {{ cmd }}"
+  postgresql_db:
+    state:          "absent"
+    name:           "{{ cmd }}"
+    login_host:     "{{ POSTGRES_HOST }}"
+    login_user:     "{{ POSTGRES_USER }}"
+    login_password: "{{ POSTGRES_PASSWORD }}"
+  when: 'POSTGRES_IMPORT_REMOVE_OLD == "1"'
+
+- name: "Create DB {{ cmd }}"
+  postgresql_db:
+    state:          "present"
+    name:           "{{ cmd }}" #"{{ POSTGRES_DB_NAME_TMP }}"
+    login_host:     "{{ POSTGRES_HOST }}"
+    login_user:     "{{ POSTGRES_USER }}"
+    login_password: "{{ POSTGRES_PASSWORD }}"
+
+#- name: "Grant permittions for {{ DB_USER }} to DB: {{ POSTGRES_DB_NAME_TMP }}"
+#  postgresql_user:
+#    state:          "present"
+#    name:           "{{ DB_USER }}"
+#    password:       "{{ POSTGRES_PASSWORD }}"
+#    append_privs:   "true"
+#    priv:           "*.*:ALL,GRANT"
+#    host_all:       "yes"
+#    login_host:     "{{ POSTGRES_HOST }}"
+#    login_user:     "{{ POSTGRES_USER }}"
+#    login_password: "{{ POSTGRES_PASSWORD }}"
+
+- name: "Create temporary dump directory"
+  file:
+    path:  "/tmp/db/psql"
+    state: directory
+
+- name: "Extract {{ cmd }}.tar.gz into /tmp/db (ENV_AWARE = no)"
+  unarchive:
+    src:  "/app/build/data-import/psql/{{ cmd }}.sql.tar.gz"
+    dest: "/tmp/db/psql/"
+
+# Recursive find for SQL files. We do recursive to avoid
+# unsuccessful builds when SQLs are in subdirectory.
+- name: "Find extraced SQL files {{ cmd }}"
+  find:
+    paths:    "/tmp/db/psql/"
+    recurse:  yes
+    patterns: "{{ cmd }}.sql"
+  register: sql_files
+
+- debug:
+    msg: "{{ sql_files.files | sort(attribute='path') }}"
+
+# Load found SQL files (it can be more than one dump)
+- name: "Restore DB: {{ cmd }} ]"
+  postgresql_db:
+    state: restore
+    name:           "{{ cmd }}" #"{{ POSTGRES_DB_NAME_TMP }}"
+    login_host:     "{{ POSTGRES_HOST }}"
+    login_user:     "{{ POSTGRES_USER }}"
+    login_password: "{{ POSTGRES_PASSWORD }}"
+    target:         "{{ item.path }}"
+  with_items:
+    - "{{ sql_files.files | sort(attribute='path') }}"
+
+# - name: "Remove remporary dump directory"
+#   file:
+#     path:  "/tmp/db"
+#     state: absent
+- name: "PostgreSQL ping DB {{ cmd }}"
+  community.postgresql.postgresql_ping:
+    db:             "{{ cmd }}"
+    login_host:     "{{ POSTGRES_HOST }}"
+    login_user:     "{{ POSTGRES_USER }}"
+    login_password: "{{ POSTGRES_PASSWORD }}"
+
+- name: "Remove remporary dump directory"
+  file:
+    path:  "/tmp/db/psql"
+    state: absent

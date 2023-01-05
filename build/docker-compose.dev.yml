@@ -1,0 +1,123 @@
+version: '3.9'
+
+volumes:
+  mysql:
+
+services:
+  php-dev:
+    image: droptica/php-cli:${D_PHP_VERSION}
+    depends_on:
+      - mysql
+    working_dir: /var/www/
+    env_file:
+      - .env
+    volumes:
+      - ../app:/var/www
+      - ./:/app/build
+      - ./ansible:/etc/ansible
+    environment:
+      - COMPOSER_PATH=/var/www
+      - PHP_MEMORY_LIMIT=-1
+      - DRUSH_OPTIONS_URI=http://${D_HOST}
+
+  apache:
+    image: droptica/php-apache:${D_PHP_VERSION}
+    depends_on:
+      - mysql
+    volumes:
+      - ../app:/var/www
+    restart: ${D_RESTART}
+    environment:
+      - DOCUMENT_ROOT=/var/www/web
+    env_file:
+      - .env
+    labels:
+      - "traefik.enable=true"
+      - "traefik.port=80"
+      - "traefik.frontend.rule=Host:${D_HOST}${D_HOST_ADDITIONAL}"
+      - "traefik.docker.network=traefik"
+      #label entrypoints traefik 2 (entrypoints defined in traefik)
+      - "traefik.http.routers.apache-${COMPOSE_PROJECT_NAME}.entrypoints=web"
+      - "traefik.http.routers.apache-${COMPOSE_PROJECT_NAME}-websecure.entrypoints=websecure"
+      #label entrypoints traefik 2
+      - "traefik.http.routers.apache-${COMPOSE_PROJECT_NAME}.tls=false"
+      - "traefik.http.routers.apache-${COMPOSE_PROJECT_NAME}-websecure.tls=true"
+      #label for traefik 2 - domain and subdomains definition
+      - "traefik.http.routers.apache-${COMPOSE_PROJECT_NAME}.rule=Host(`${D_HOST}`, ${T2_D_HOST_ADDITIONAL})"
+      - "traefik.http.routers.apache-${COMPOSE_PROJECT_NAME}-websecure.rule=Host(`${D_HOST}`, ${T2_D_HOST_ADDITIONAL})"
+      #letsencrypt cert - tls certresolver defined in traefik configuration
+      - "traefik.http.routers.apache-${COMPOSE_PROJECT_NAME}-websecure.tls.certresolver=letsencrypt"
+      #traefik 2 middlewares - router rules such as redirect http to https, authentication
+      - "traefik.http.routers.apache-${COMPOSE_PROJECT_NAME}.middlewares=${T2_WEB_MIDDLEWARES}"
+      - "traefik.http.routers.apache-${COMPOSE_PROJECT_NAME}-websecure.middlewares=${T2_WEBSECURE_MIDDLEWARES}"
+      #traefik 2 preconfigured htpass if router authentication is enabled in env
+      - "traefik.http.middlewares.${COMPOSE_PROJECT_NAME}-authpass.basicauth.users=${T2_AUTH_WEB}"
+    networks:
+      - traefik
+      - default
+
+  mysql:
+    image: ${MYSQL_IMAGE}:${MYSQL_VERSION}
+    volumes:
+      - mysql:/var/lib/mysql
+      - ./configs/mysql/dev-my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    restart: ${D_RESTART}
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER:     ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+
+  pma:
+    image: phpmyadmin
+    depends_on:
+      - mysql
+    restart: ${D_RESTART}
+    environment:
+      - 'PMA_HOST=mysql'
+      - 'PMA_PORT=3306'
+    labels:
+      - "traefik.frontend.rule=Host:pma.${D_HOST}"
+      - "traefik.docker.network=traefik"
+      #traefik 2 labels
+      - "traefik.enable=true"
+      - "traefik.http.routers.pma-${COMPOSE_PROJECT_NAME}.entrypoints=web"
+      - "traefik.http.routers.pma-${COMPOSE_PROJECT_NAME}.tls=false"
+      - "traefik.http.routers.pma-${COMPOSE_PROJECT_NAME}-websecure.entrypoints=websecure"
+      - "traefik.http.routers.pma-${COMPOSE_PROJECT_NAME}-websecure.tls=true"
+      - "traefik.http.routers.pma-${COMPOSE_PROJECT_NAME}.rule=Host(`pma.${D_HOST}`)"
+      - "traefik.http.routers.pma-${COMPOSE_PROJECT_NAME}-websecure.rule=Host(`pma.${D_HOST}`)"
+      - "traefik.http.routers.pma-${COMPOSE_PROJECT_NAME}-websecure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.pma-${COMPOSE_PROJECT_NAME}.middlewares=${T2_WEB_MIDDLEWARES}"
+      - "traefik.http.routers.pma-${COMPOSE_PROJECT_NAME}-websecure.middlewares=${T2_WEBSECURE_MIDDLEWARES}"
+    networks:
+      - traefik
+      - default
+
+  mailcatcher:
+    image: droptica/maildev
+    restart: ${D_RESTART}
+    labels:
+      - "traefik.frontend.rule=Host:mails.${D_HOST}"
+      - "traefik.docker.network=traefik"
+      #traefik 2 labels
+      - "traefik.enable=true"
+      - "traefik.http.routers.mails-${COMPOSE_PROJECT_NAME}.entrypoints=web"
+      - "traefik.http.routers.mails-${COMPOSE_PROJECT_NAME}.tls=false"
+      - "traefik.http.routers.mails-${COMPOSE_PROJECT_NAME}-websecure.entrypoints=websecure"
+      - "traefik.http.routers.mails-${COMPOSE_PROJECT_NAME}-websecure.tls=true"
+      - "traefik.http.routers.mails-${COMPOSE_PROJECT_NAME}.rule=Host(`mails.${D_HOST}`)"
+      - "traefik.http.routers.mails-${COMPOSE_PROJECT_NAME}-websecure.rule=Host(`mails.${D_HOST}`)"
+      - "traefik.http.routers.mails-${COMPOSE_PROJECT_NAME}-websecure.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.mails-${COMPOSE_PROJECT_NAME}.middlewares=${T2_WEB_MIDDLEWARES}"
+      - "traefik.http.routers.mails-${COMPOSE_PROJECT_NAME}-websecure.middlewares=${T2_WEBSECURE_MIDDLEWARES}"
+    networks:
+      - traefik
+      - default
+
+networks:
+  default:
+    name: ${COMPOSE_PROJECT_NAME}
+  traefik:
+    name: traefik
+    external: true

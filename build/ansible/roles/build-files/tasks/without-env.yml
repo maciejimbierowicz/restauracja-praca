@@ -1,0 +1,11 @@
+---
+
+# Copy all files from build/files (ignore env directories)
+  - name: Copy files from build/files (ENV_AWARE = no)
+    synchronize:
+     src:  "{{ ansible_path | default('/app/build', true) }}/files/"
+     dest: "{{ app_path }}"
+     rsync_opts:
+       - "--exclude=*.tar.gz"
+       - "--exclude=*.sql.gz"
+       - "--exclude=*.sql"

@@ -1,0 +1,11 @@
+---
+
+- name: Site URL
+  shell: echo "http://{{ D_HOST }}/"
+
+- name: Login URL
+  shell: drush --uri={{ D_HOST }} uli
+  args:
+    chdir: "{{ app_path }}"
+  when: skip_drush is undefined or skip_drush == "no"
+

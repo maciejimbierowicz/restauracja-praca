@@ -1,0 +1,15 @@
+---
+#set custom files and dir permissions
+
+- name: Set permissions on sites directory in loop
+  file:
+    path:    "{{ app_path }}/{{ dst_dir_custom }}"
+    recurse: "yes"
+    mode:    "u=rwX,g=rwX,o=rwX"
+  when:
+    - D_ENV == "dev"
+    - dst_dir_custom is defined
+
+- name: Set owner on all sources ( /app )
+  shell: chown -R {{ UID }}:{{ UID }} /app
+  when: D_ENV == "dev" and UID is defined

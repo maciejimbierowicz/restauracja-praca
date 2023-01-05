@@ -1,0 +1,16 @@
+---
+#Create custom directory and extract custom files to them
+
+  - name: Create files directory
+    file:
+      path:   "{{ app_path }}/{{ dst_dir_custom }}"
+      state:  "directory"
+      mode:   "u=rwx,g=rx,o=rx"
+    when: dst_dir_custom is defined
+
+  - name: Extract custom files.tar.gz
+    unarchive:
+      src:  "{{ ansible_path | default('/app/build', true) }}/{{ src_file_custom }}"
+      dest: "{{ app_path }}/{{ dst_dir_custom }}"
+    when: src_file_custom is defined
+    ignore_errors: yes

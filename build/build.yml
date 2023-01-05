@@ -1,0 +1,68 @@
+- name: run the playbook tasks on the localhost
+  hosts:       127.0.0.1
+  connection:  local
+  vars:
+    - app_path: /app/web
+    - composer_path: /app
+    - ansible_path: /app/build
+    - supported_sites:
+        - default
+
+  pre_tasks:
+    - name: Load environment variables (.env file)
+      tags: always
+      set_fact:
+        DB_HOST:   '{{ lookup("env", "DB_HOST") }}'
+        DB_USER:   '{{ lookup("env", "DB_USER") }}'
+        DB_PASS:   '{{ lookup("env", "DB_PASS") }}'
+        DB_NAME:   '{{ lookup("env", "DB_NAME") }}'
+        D_ENV:     '{{ lookup("env", "D_ENV") }}'
+        D_HOST:    '{{ lookup("env", "D_HOST") }}'
+        D_VERSION: '{{ lookup("env", "D_VERSION") }}'
+
+  # In this section build modules are loaded. Feel
+  # free to comment not required.
+
+  tasks:
+    - import_role:
+        name: build-init
+      tags: init
+
+#    - import_role:
+#        name: build-composer
+##      vars:
+##        extra_cmds:
+##          - drupal-scaffold
+#      tags: composer
+#
+#    - import_role:
+#        name: build-files
+#      tags: files
+#      vars:
+#        ENV_AWARE: "no"
+#      when: D_ENV != "prod"
+#
+    - import_role:
+        name: build-mysql-gz
+      tags: mysql
+      when: D_ENV != "prod"
+#
+#    - import_role:
+#        name: build-drush
+#      vars:
+#        cmds:
+#          - updb
+#          - cr
+#      tags: drush
+#
+#    - import_role:
+#        name: build-drush
+#      vars:
+#        cmds:
+#          -  "user:password admin 123"
+#      tags: drush
+#      when: D_ENV != "prod"
+#
+#    - import_role:
+#        name: build-output
+#      tags: output
